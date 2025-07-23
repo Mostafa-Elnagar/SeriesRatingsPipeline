@@ -50,8 +50,8 @@ E --> F[Tableau Dashboard]
 Star schema optimized for analytics and ML use:
 
 - **series**: series_id (PK), title, release_year, genres, language, network, plot  
-- **ratings**: series_id (FK), imdb_rating, tomatoes_critic, metacritic, etc.  
-- **genre_dim**, **network_dim** for normalization  
+- **ratings**: `series_id` (FK), `imdb_rating`, `imdb_count`, `tomatoes_critic`, `tomatoes_critic_count`, `metacritic`, `metacritic_count`, `metauser`, `metauser_count`, `start_date`, `end_date`, `is_current`
+- **genre_dim**, **network_dim**   
 
 ---
 
