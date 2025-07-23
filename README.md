@@ -1,45 +1,167 @@
-Overview
-========
+# 📺 TV Series ETL Pipeline 
 
-Welcome to Astronomer! This project was generated after you ran 'astro dev init' using the Astronomer CLI. This readme describes the contents of the project, as well as how to run Apache Airflow on your local machine.
+## 1. Project Overview
 
-Project Contents
-================
+This project aims to build a modular, scalable ETL pipeline that collects, processes, and stores high-quality metadata and ratings for top-ranked TV series. The pipeline will serve as a data foundation for future systems like recommendation engines and conversational agents (chatbots), and immediately support business analytics dashboards built in **Tableau**.
 
-Your Astro project contains the following files and folders:
+---
 
-- dags: This folder contains the Python files for your Airflow DAGs. By default, this directory includes one example DAG:
-    - `example_astronauts`: This DAG shows a simple ETL pipeline example that queries the list of astronauts currently in space from the Open Notify API and prints a statement for each astronaut. The DAG uses the TaskFlow API to define tasks in Python, and dynamic task mapping to dynamically print a statement for each astronaut. For more on how this DAG works, see our [Getting started tutorial](https://www.astronomer.io/docs/learn/get-started-with-airflow).
-- Dockerfile: This file contains a versioned Astro Runtime Docker image that provides a differentiated Airflow experience. If you want to execute other commands or overrides at runtime, specify them here.
-- include: This folder contains any additional files that you want to include as part of your project. It is empty by default.
-- packages.txt: Install OS-level packages needed for your project by adding them to this file. It is empty by default.
-- requirements.txt: Install Python packages needed for your project by adding them to this file. It is empty by default.
-- plugins: Add custom or community plugins for your project to this file. It is empty by default.
-- airflow_settings.yaml: Use this local-only file to specify Airflow Connections, Variables, and Pools instead of entering them in the Airflow UI as you develop DAGs in this project.
+## 2. Objectives
 
-Deploy Your Project Locally
-===========================
+- Fetch structured data on top-rated TV series from **TMDB**.
+- Enrich metadata with **aggregated ratings** from APIs like **OMDb** (IMDb, Rotten Tomatoes, Metacritic).
+- Store cleaned, well-modeled data in a **PostgreSQL** database.
+- Create a **Tableau dashboard** for stakeholders to explore and analyze the data.
+- Ensure the pipeline is **modular**, **monitorable**, and **future-ready** for machine learning applications.
 
-Start Airflow on your local machine by running 'astro dev start'.
+---
 
-This command will spin up five Docker containers on your machine, each for a different Airflow component:
+## 3. Data Sources
 
-- Postgres: Airflow's Metadata Database
-- Scheduler: The Airflow component responsible for monitoring and triggering tasks
-- DAG Processor: The Airflow component responsible for parsing DAGs
-- API Server: The Airflow component responsible for serving the Airflow UI and API
-- Triggerer: The Airflow component responsible for triggering deferred tasks
+| Source       | Purpose                              | Access Method            |
+|--------------|--------------------------------------|---------------------------|
+| TMDB API     | Fetch top-rated series and metadata  | REST API with pagination  |
+| OMDb API     | Enrich with ratings                  | REST API with API Key     |
+| Web Scraping | Rotten Tomatoes & Metacritic ratings | Selenium / Requests / BS4 |
 
-When all five containers are ready the command will open the browser to the Airflow UI at http://localhost:8080/. You should also be able to access your Postgres Database at 'localhost:5432/postgres' with username 'postgres' and password 'postgres'.
+---
 
-Note: If you already have either of the above ports allocated, you can either [stop your existing Docker containers or change the port](https://www.astronomer.io/docs/astro/cli/troubleshoot-locally#ports-are-not-available-for-my-local-airflow-webserver).
+## 4. System Architecture
 
-Deploy Your Project to Astronomer
-=================================
+### Tools & Stack
 
-If you have an Astronomer account, pushing code to a Deployment on Astronomer is simple. For deploying instructions, refer to Astronomer documentation: https://www.astronomer.io/docs/astro/deploy-code/
+- **ETL Orchestration**: Apache Airflow on **Astronomer**
+- **Database**: PostgreSQL
+- **Data Transformations**: `dbt`
+- **Dashboarding**: Tableau
+- **Monitoring**:
+  - **Airflow UI** for DAG execution tracking
+  - **Grafana** dashboards for:
+    - Task runtime, failure/success trends
+    - Data quality validation (via Great Expectations)
+    - PostgreSQL health metrics (row counts, nulls, freshness)
+  - **Prometheus** or **StatsD** as Grafana data sources
+  - Slack/Email alerts on pipeline failures or data anomalies
+- **Containerization**: Docker (future CI/CD via GitHub Actions)
 
-Contact
-=======
+### High-Level Workflow
 
-The Astronomer CLI is maintained with love by the Astronomer team. To report a bug or suggest a change, reach out to our support.
+```mermaid
+graph TD
+  A[TMDB API] --> B[Raw Data Ingestion]
+  B --> C[OMDb API Enrichment]
+  B --> CD[Scrapers Enrichment]
+  C --> D[Data Cleaning & Transformation]
+  CD --> D
+  D --> E[PostgreSQL DB]
+  E --> F[Tableau Dashboard]
+```
+
+---
+
+## 5. Database Design
+
+### Tables
+
+- **series**
+  - `series_id` (PK), `title`, `release_year`, `genres`, `language`, `network`, `plot`
+- **ratings**
+  - `series_id` (FK), `imdb_rating`, `imdb_count`, `tomatoes_critic`, `tomatoes_critic_count`, `metacritic`, `metacritic_count`, `metauser`, `metauser_count`
+- **genre_dim**, **network_dim** (for analytics efficiency)
+
+> **Star schema** layout ensures performance for analytics and supports downstream ML integration.
+
+---
+
+## 6. Dashboard (Tableau)
+
+### Key Dashboards
+
+- Top-Rated Series by Platform
+- Rating Distribution Across Genres
+- Trends in Ratings Over Time
+- Multi-Source Rating Comparison
+
+### Features
+
+- Filtering by genre, platform, year
+- Drill-down to individual show profiles
+- Auto-refresh from database (PostgreSQL)
+
+---
+
+## 7. ETL Pipeline Design
+
+### Best Practices
+
+- **Atomic and Idempotent Tasks**: Supports retries without corruption
+- **Task Isolation**: Separate ingestion, transformation, enrichment
+- **Monitoring & Alerts**: Grafana dashboards, Airflow logs, Slack/email alerts
+- **Chunked Processing**: Batch API calls to avoid rate limits
+
+### Data Quality
+
+- **Great Expectations** for:
+  - Non-null rating fields
+  - Valid genre values
+  - Correct score ranges (e.g., 0–10)
+
+### Data Quality Monitoring with Grafana
+
+- **Metrics Tracked:**
+  - Row ingestion volume per run
+  - Null percentage in key columns
+  - Schema validation success rates
+  - Timestamp-based data freshness
+
+- **Architecture:**
+  - Use **Prometheus** scrapers to collect metrics from:
+    - Airflow DAGs (via exporters or StatsD)
+    - PostgreSQL row counts and freshness queries
+    - Great Expectations validation results
+  - Visualized in **Grafana** with:
+    - Daily pipeline health board
+    - Data validation success/failure trends
+    - Alert panel for anomalies (e.g. >10% null in `ratings`)
+
+---
+
+## 8. Future Readiness
+
+- Pipeline designed to support future:
+  - 📦 **Recommendation Systems** (content-based, collaborative filtering)
+  - 🤖 **Chatbots** (search + personalized API serving)
+- Stored features (e.g., genres, ratings) are ML-friendly
+- Modular Airflow DAGs simplify onboarding new data sources or features
+
+---
+
+## 9. Assumptions & Constraints
+
+- OMDb API rate limits may require caching
+- TMDB pagination caps top-rated shows (~500 entries)
+- Tableau licensing and data connectors must be pre-configured
+- Prometheus/Grafana monitoring requires containerized exporter setup
+
+---
+
+## 10. Stakeholders
+
+| Stakeholder       | Role                          |
+|-------------------|-------------------------------|
+| Data Engineers    | Build and maintain ETL        |
+| BI Analysts       | Explore Tableau dashboards    |
+| Product Managers  | Define KPIs and priorities    |
+| ML Engineers      | Consume cleaned data later    |
+| DevOps Engineers  | Maintain observability tools  |
+
+---
+
+## 11. Success Criteria
+
+- ✅ Weekly updated and validated TV series data in PostgreSQL
+- ✅ Functional Tableau dashboard for stakeholder exploration
+- ✅ Reliable, monitorable Airflow DAGs with Grafana alerts
+- ✅ Modular ETL design ready for ML/AI systems
+
+---
