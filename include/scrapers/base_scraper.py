@@ -79,7 +79,7 @@ class HtmlScraper(BaseScraper):
     """
     Scraper for static HTML pages using requests.
     """
-    REQUEST_DELAY_SECONDS = 2
+    REQUEST_DELAY_SECONDS = 1
 
     def __init__(self, base_url: str, robots_txt_path: str = "robots.txt", user_agent: str = ""):
         super().__init__(base_url, robots_txt_path, user_agent)
@@ -107,6 +107,7 @@ class SeleniumScraper(BaseScraper):
         if not self.driver_path or not os.path.exists(self.driver_path):
             raise FileNotFoundError(f"ChromeDriver not found at {self.driver_path}. Set CHROME_DRIVER in your .env file or pass driver_path explicitly.")
         chrome_options = Options()
+        chrome_options.add_argument("--headless=new")
         chrome_options.add_argument("--disable-gpu")
         chrome_options.add_argument("--disable-software-rasterizer")
         chrome_options.add_argument("--disable-3d-apis")
@@ -131,7 +132,7 @@ class SeleniumScraper(BaseScraper):
     def _fetch_page(self, url: str) -> str | None:
         try:
             self.driver.get(url)
-            wait = WebDriverWait(self.driver, 10)
+            wait = WebDriverWait(self.driver, 8)
             wait.until(EC.presence_of_element_located((By.TAG_NAME, "media-scorecard")))
             return self.driver.page_source
         except Exception as e:
